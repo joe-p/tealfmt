@@ -1,4 +1,4 @@
-module linteal
+module tealfmt
 
 go 1.18
 

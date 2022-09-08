@@ -27,12 +27,12 @@ func contains(strs []string, str string) bool {
 }
 
 func main() {
-	usage := `LinTEAL
+	usage := `tealfmt
 
 Usage:
-  linteal <file>
-  linteal -h | --help
-  linteal --version
+  tealfmt <file>
+  tealfmt -h | --help
+  tealfmt --version
 
 Options:
   -h --help     Show this screen.
