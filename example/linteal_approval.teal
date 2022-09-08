@@ -1,0 +1,265 @@
+#pragma version 7
+
+    intcblock 0 1
+    bytecblock 0x686967686573745f626964646572 0x686967686573745f626964 0x61756374696f6e5f656e64 0x6f776e6572 0x
+    txn NumAppArgs
+    intc_0 // 0
+    ==
+    bnz main_l8
+
+    txna ApplicationArgs 0
+    pushbytes 0xdb7fe843 // "bid(pay)void"
+    ==
+    bnz main_l7
+
+    txna ApplicationArgs 0
+    pushbytes 0x763402df // "start_auction(pay,uint64,uint64)void"
+    ==
+    bnz main_l6
+
+    txna ApplicationArgs 0
+    pushbytes 0xd1a99e7a // "end_auction()void"
+    ==
+    bnz main_l5
+
+    err
+
+// testing
+// multi-line
+// header
+main_l5:
+    txn OnCompletion
+    intc_0 // NoOp
+    ==
+    txn ApplicationID
+    intc_0 // 0
+    !=
+    &&
+    assert
+
+    callsub endauction_4
+    intc_1 // 1
+    return
+
+main_l6:
+    txn OnCompletion
+    intc_0 // NoOp
+    ==
+    txn ApplicationID
+    intc_0 // 0
+    !=
+    &&
+    assert
+
+    txna ApplicationArgs 1
+    btoi
+    store 2
+
+    txna ApplicationArgs 2
+    btoi
+    store 3
+
+    txn GroupIndex
+    intc_1 // 1
+    -
+    store 1
+
+    load 1
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert
+
+    load 1
+    load 2
+    load 3
+    callsub startauction_3
+    intc_1 // 1
+    return
+
+main_l7:
+    txn OnCompletion
+    intc_0 // NoOp
+    ==
+    txn ApplicationID
+    intc_0 // 0
+    !=
+    &&
+    assert
+
+    txn GroupIndex
+    intc_1 // 1
+    -
+    store 0
+
+    load 0
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert
+
+    load 0
+    callsub bid_1
+    intc_1 // 1
+    return
+
+main_l8:
+    txn OnCompletion
+    intc_0 // NoOp
+    ==
+    bnz main_l10
+
+    err
+
+main_l10:
+    txn ApplicationID
+    intc_0 // 0
+    ==
+    assert
+
+    callsub create_0
+    intc_1 // 1
+    return
+    
+// create
+create_0:
+    bytec_3 // "owner"
+    txn Sender
+    app_global_put
+
+    bytec_0 // "highest_bidder"
+    bytec 4 // ""
+    app_global_put
+
+    bytec_1 // "highest_bid"
+    intc_0 // 0
+    app_global_put
+
+    bytec_2 // "auction_end"
+    intc_0 // 0
+    app_global_put
+
+    retsub
+    
+// bid
+bid_1:
+    store 4
+
+    global LatestTimestamp
+    bytec_2 // "auction_end"
+    app_global_get
+    <
+    assert
+
+    load 4
+    gtxns Amount
+    bytec_1 // "highest_bid"
+    app_global_get
+    >
+    assert
+
+    load 4
+    gtxns Sender
+    txn Sender
+    ==
+    assert
+
+    bytec_0 // "highest_bidder"
+    app_global_get
+    bytec 4 // ""
+    !=
+    bz bid_1_l2
+
+    bytec_0 // "highest_bidder"
+    app_global_get
+    bytec_1 // "highest_bid"
+    app_global_get
+    callsub pay_2
+
+bid_1_l2:
+    bytec_1 // "highest_bid"
+    load 4
+    gtxns Amount
+    app_global_put
+
+    bytec_0 // "highest_bidder"
+    load 4
+    gtxns Sender
+    app_global_put
+
+    retsub
+    
+// pay
+pay_2:
+    store 6
+    store 5
+
+    itxn_begin
+    intc_1 // pay
+    itxn_field TypeEnum
+    load 5
+    itxn_field Receiver
+    load 6
+    itxn_field Amount
+    intc_0 // 0
+    itxn_field Fee
+    itxn_submit
+    retsub
+    
+// start_auction
+startauction_3:
+    store 9
+    store 8
+    store 7
+
+    load 7
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert
+
+    load 7
+    gtxns Amount
+    pushint 100000 // 100000
+    ==
+    assert
+
+    bytec_2 // "auction_end"
+    global LatestTimestamp
+    load 9
+    +
+    app_global_put
+
+    bytec_1 // "highest_bid"
+    load 8
+    app_global_put
+
+    retsub
+    
+// end_auction
+endauction_4:
+    global LatestTimestamp
+    bytec_2 // "auction_end"
+    app_global_get
+    >
+    assert
+
+    bytec_3 // "owner"
+    app_global_get
+    bytec_1 // "highest_bid"
+    app_global_get
+    callsub pay_2
+    bytec_2 // "auction_end"
+    intc_0 // 0
+    app_global_put
+
+    bytec_3 // "owner"
+    bytec_0 // "highest_bidder"
+    app_global_get
+    app_global_put
+
+    bytec_0 // "highest_bidder"
+    bytec 4 // ""
+    app_global_put
+
+    retsub
