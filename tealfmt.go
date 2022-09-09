@@ -40,20 +40,24 @@ func contains(strs []string, str string) bool {
 	return false
 }
 
+func insert(a []string, index int, value string) []string {
+	if len(a) == index { // nil or empty slice or after last element
+		return append(a, value)
+	}
+	a = append(a[:index+1], a[index:]...) // index < len(a)
+	a[index] = value
+	return a
+}
+
 func handleLabel(newLinesPtr *[]string, commentLines int, trimmedLastLine string, line string) {
 	newLines := *newLinesPtr
 
-	// Undo indentation of comments if they are headers comments of a label
+	// Undo indentation of comments if they are header comments of a label
 	if commentLines > 0 {
 		for i := 1; i <= commentLines; i++ {
 			idx := len(newLines) - i
 			newLines[idx] = strings.TrimSpace(newLines[idx])
 		}
-
-		if commentLines > 1 {
-			newLines[len(newLines)-commentLines] = "\n" + newLines[len(newLines)-commentLines]
-		}
-
 	} else if trimmedLastLine != "" {
 		newLines = append(newLines, "")
 	}
@@ -74,6 +78,10 @@ func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOp
 	if len(newLines) > 0 {
 		lastLine = newLines[(len(newLines))-1]
 		trimmedLastLine = strings.TrimSpace(lastLine)
+	}
+
+	if regexp.MustCompile(`^#pragma `).MatchString(trimmedLastLine) && line != "" {
+		newLines = append(newLines, "")
 	}
 
 	opRegex, _ := regexp.Compile(`\S+`)
@@ -97,6 +105,9 @@ func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOp
 	}
 
 	if commentRegex.MatchString(line) {
+		if commentLines == 0 && trimmedLastLine != "" {
+			newLines = insert(newLines, len(newLines)-1, "")
+		}
 		commentLines++
 	} else {
 		commentLines = 0
@@ -132,7 +143,6 @@ func main() {
 
 		if regexp.MustCompile(`^#pragma `).MatchString(line) {
 			newLines = append(newLines, line)
-			newLines = append(newLines, "")
 			continue
 		}
 
