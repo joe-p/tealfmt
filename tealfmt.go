@@ -29,7 +29,7 @@ Options:
 var (
 	voidOps = []string{
 		"assert", "err", "return", "app_global_put", "b", "bnz", "bz", "store",
-		"stores", "app_local_put", "app_global_del", "app_local_del", "callsub",
+		"stores", "app_local_put", "app_global_del", "app_local_del", "callsub", "retsub",
 		"log", "itxn_submit", "itxn_next",
 	}
 
