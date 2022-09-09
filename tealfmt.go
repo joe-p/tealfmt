@@ -11,6 +11,17 @@ import (
 	"github.com/docopt/docopt-go"
 )
 
+const usage = `tealfmt
+
+Usage:
+  tealfmt <file>
+  tealfmt -h | --help
+  tealfmt --version
+
+Options:
+  -h --help     Show this screen.
+  --version     Show version.`
+
 var config struct {
 	File string `docopt:"<file>"`
 }
@@ -26,18 +37,74 @@ func contains(strs []string, str string) bool {
 	return false
 }
 
+func handleLabel(newLinesPtr *[]string, commentLines int, trimmedLastLine string, line string) {
+	newLines := *newLinesPtr
+
+	// Undo indentation of comments if they are headers comments of a label
+	if commentLines > 0 {
+		for i := 1; i <= commentLines; i++ {
+			idx := len(newLines) - i
+			newLines[idx] = strings.TrimSpace(newLines[idx])
+		}
+
+		if commentLines > 1 {
+			newLines[len(newLines)-commentLines] = "\n" + newLines[len(newLines)-commentLines]
+		}
+
+	} else if trimmedLastLine != "" {
+		newLines = append(newLines, "")
+	}
+
+	newLines = append(newLines, line)
+
+	*newLinesPtr = newLines
+}
+
+func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOpLinesPtr *bool) {
+	newLines := *newLinesPtr
+	commentLines := *commentLinesPtr
+	voidOpLines := *voidOpLinesPtr
+
+	lastLine := ""
+	trimmedLastLine := ""
+
+	if len(newLines) > 0 {
+		lastLine = newLines[(len(newLines))-1]
+		trimmedLastLine = strings.TrimSpace(lastLine)
+	}
+
+	opRegex, _ := regexp.Compile(`\S+`)
+	opcode := opRegex.FindString(line)
+
+	labelRegex, _ := regexp.Compile(`\S+:($| //)`)
+	commentRegex, _ := regexp.Compile(`^//`)
+
+	// Add a space after any sequence of voidOps
+	if contains(voidOps[:], opcode) {
+		voidOpLines = true
+	} else if voidOpLines == true {
+		voidOpLines = false
+		newLines = append(newLines, "")
+	}
+
+	if labelRegex.MatchString(line) {
+		handleLabel(&newLines, commentLines, trimmedLastLine, line)
+	} else {
+		newLines = append(newLines, "    "+line)
+	}
+
+	if commentRegex.MatchString(line) {
+		commentLines++
+	} else {
+		commentLines = 0
+	}
+
+	*newLinesPtr = newLines
+	*commentLinesPtr = commentLines
+	*voidOpLinesPtr = voidOpLines
+}
+
 func main() {
-	usage := `tealfmt
-
-Usage:
-  tealfmt <file>
-  tealfmt -h | --help
-  tealfmt --version
-
-Options:
-  -h --help     Show this screen.
-  --version     Show version.`
-
 	opts, err := docopt.ParseArgs(usage, os.Args[1:], "")
 	if err != nil {
 		log.Fatal(err)
@@ -54,67 +121,19 @@ Options:
 
 	newLines := []string{}
 	commentLines := 0
-	voidOpLines := true
+	voidOpLines := false
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		pragmaRegex := regexp.MustCompile(`^#pragma `)
-		if pragmaRegex.MatchString(line) {
+		if regexp.MustCompile(`^#pragma `).MatchString(line) {
 			newLines = append(newLines, line)
+			newLines = append(newLines, "")
 			continue
 		}
 
-		lastLine := ""
-		trimmedLastLine := ""
-
-		if len(newLines) > 0 {
-			lastLine = newLines[(len(newLines))-1]
-			trimmedLastLine = strings.TrimSpace(lastLine)
-		}
-
-		opRegex, _ := regexp.Compile(`\S+`)
-		opcode := opRegex.FindString(line)
-
-		labelRegex, _ := regexp.Compile(`\S+:($| //)`)
-		commentRegex, _ := regexp.Compile(`^//`)
-
-		// Add a space after any sequence of voidOps
-		if contains(voidOps[:], opcode) {
-			voidOpLines = true
-		} else if voidOpLines == true {
-			voidOpLines = false
-			newLines = append(newLines, "")
-		}
-
-		if labelRegex.MatchString(line) {
-
-			// Undo indentation of comments if they are headers comments of a label
-			if commentLines > 0 {
-				for i := 1; i <= commentLines; i++ {
-					idx := len(newLines) - i
-					newLines[idx] = strings.TrimSpace(newLines[idx])
-				}
-
-				if commentLines > 1 {
-					newLines[len(newLines)-commentLines] = "\n" + newLines[len(newLines)-commentLines]
-				}
-
-			} else if trimmedLastLine != "" {
-				newLines = append(newLines, "")
-			}
-
-			newLines = append(newLines, line)
-		} else {
-			newLines = append(newLines, "    "+line)
-		}
-
-		if commentRegex.MatchString(line) {
-			commentLines++
-		} else {
-			commentLines = 0
-		}
+		handleLine(&newLines, line, &commentLines, &voidOpLines)
 	}
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
