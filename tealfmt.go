@@ -29,7 +29,19 @@ var config struct {
 	Edit bool
 }
 
-var voidOps = [...]string{"assert", "app_global_put", "b", "bnz", "bz", "store"}
+var voidOps = [...]string{"assert", "app_global_put", "b", "bnz", "bz", "store",
+	"stores", "app_local_put", "app_global_del", "app_local_del", "callsub",
+	"log", "itxn_submit", "itxn_next"}
+
+func addEmptyLine(newLinesPtr *[]string, emptyCheckLine string) {
+	newLines := *newLinesPtr
+
+	if emptyCheckLine != "" {
+		newLines = append(newLines, "")
+	}
+
+	*newLinesPtr = newLines
+}
 
 func contains(strs []string, str string) bool {
 	for _, ss := range strs {
@@ -58,8 +70,8 @@ func handleLabel(newLinesPtr *[]string, commentLines int, trimmedLastLine string
 			idx := len(newLines) - i
 			newLines[idx] = strings.TrimSpace(newLines[idx])
 		}
-	} else if trimmedLastLine != "" {
-		newLines = append(newLines, "")
+	} else {
+		addEmptyLine(&newLines, trimmedLastLine)
 	}
 
 	newLines = append(newLines, line)
@@ -81,7 +93,7 @@ func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOp
 	}
 
 	if regexp.MustCompile(`^#pragma `).MatchString(trimmedLastLine) && line != "" {
-		newLines = append(newLines, "")
+		addEmptyLine(&newLines, trimmedLastLine)
 	}
 
 	opRegex, _ := regexp.Compile(`\S+`)
@@ -95,7 +107,9 @@ func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOp
 		voidOpLines = true
 	} else if voidOpLines == true {
 		voidOpLines = false
-		newLines = append(newLines, "")
+		if !labelRegex.MatchString(line) {
+			addEmptyLine(&newLines, trimmedLastLine)
+		}
 	}
 
 	if labelRegex.MatchString(line) {
