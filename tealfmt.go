@@ -11,165 +11,158 @@ import (
 	"github.com/docopt/docopt-go"
 )
 
-const version = "tealfmt v0.1.0"
-const usage = `tealfmt
+const (
+	version = "tealfmt v0.1.0"
+	usage   = `tealfmt
 
 Usage:
-  tealfmt <file> [ -e | --edit ]
+  tealfmt <file> [ -i | --inplace ]
   tealfmt -h | --help
   tealfmt --version
 
 Options:
   -h --help     Show this screen.
   --version     Show version.
-  -e --edit     Edit the file in place.`
+  -i --inplace  Edit the file in place.`
+)
 
-var config struct {
-	File string
-	Edit bool
+var (
+	voidOps = []string{
+		"assert", "err", "return", "app_global_put", "b", "bnz", "bz", "store",
+		"stores", "app_local_put", "app_global_del", "app_local_del", "callsub", "retsub",
+		"log", "itxn_submit", "itxn_next",
+	}
+
+	versionMatch = regexp.MustCompile(`^#pragma `)
+	opMatch      = regexp.MustCompile(`\S+`)
+	labelRegex   = regexp.MustCompile(`\S+:($| //)`)
+	commentRegex = regexp.MustCompile(`^//`)
+	voidOpMatch  = regexp.MustCompile("^(" + strings.Join(voidOps, "|") + ")$")
+)
+
+type Config struct {
+	File    string `docopt:"<file>"`
+	InPlace bool   `docopt:"-i,--inplace"`
+}
+type Line struct {
+	Text     string
+	Comments []string
+	IsVoid   bool
+	IsLabel  bool
+	Op       string
 }
 
-var voidOps = [...]string{"assert", "app_global_put", "b", "bnz", "bz", "store",
-	"stores", "app_local_put", "app_global_del", "app_local_del", "callsub",
-	"log", "itxn_submit", "itxn_next"}
-
-func addEmptyLine(newLinesPtr *[]string, emptyCheckLine string) {
-	newLines := *newLinesPtr
-
-	if emptyCheckLine != "" {
-		newLines = append(newLines, "")
+// ToString returns a string representing the TEAL line
+// With any comments above it matching its indent settings
+func (l *Line) ToString(insideBody bool) string {
+	// If we're inside the body of a label
+	// we should add a tab
+	indent := ""
+	if insideBody {
+		indent = "\t"
 	}
 
-	*newLinesPtr = newLines
-}
-
-func contains(strs []string, str string) bool {
-	for _, ss := range strs {
-		if ss == str {
-			return true
-		}
-	}
-	return false
-}
-
-func insert(a []string, index int, value string) []string {
-	if len(a) == index { // nil or empty slice or after last element
-		return append(a, value)
-	}
-	a = append(a[:index+1], a[index:]...) // index < len(a)
-	a[index] = value
-	return a
-}
-
-func handleLabel(newLinesPtr *[]string, commentLines int, trimmedLastLine string, line string) {
-	newLines := *newLinesPtr
-
-	// Undo indentation of comments if they are header comments of a label
-	if commentLines > 0 {
-		for i := 1; i <= commentLines; i++ {
-			idx := len(newLines) - i
-			newLines[idx] = strings.TrimSpace(newLines[idx])
-		}
-	} else {
-		addEmptyLine(&newLines, trimmedLastLine)
+	// A new line is added after a label, void op, or any op with comments
+	newline := ""
+	if l.IsVoid || l.IsLabel || len(l.Comments) > 0 {
+		newline = "\n"
 	}
 
-	newLines = append(newLines, line)
-
-	*newLinesPtr = newLines
-}
-
-func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOpLinesPtr *bool) {
-	newLines := *newLinesPtr
-	commentLines := *commentLinesPtr
-	voidOpLines := *voidOpLinesPtr
-
-	lastLine := ""
-	trimmedLastLine := ""
-
-	if len(newLines) > 0 {
-		lastLine = newLines[(len(newLines))-1]
-		trimmedLastLine = strings.TrimSpace(lastLine)
+	// Set appropriate indent on each comment
+	comments := ""
+	for _, comment := range l.Comments {
+		comments += fmt.Sprintf("%s%s\n", indent, comment)
 	}
 
-	if regexp.MustCompile(`^#pragma `).MatchString(trimmedLastLine) && line != "" {
-		addEmptyLine(&newLines, trimmedLastLine)
-	}
+	// Add any indent, and an extra newline if necessary
+	line := fmt.Sprintf("%s%s%s", indent, l.Text, newline)
 
-	opRegex, _ := regexp.Compile(`\S+`)
-	opcode := opRegex.FindString(line)
-
-	labelRegex, _ := regexp.Compile(`\S+:($| //)`)
-	commentRegex, _ := regexp.Compile(`^//`)
-
-	// Add a space after any sequence of voidOps
-	if contains(voidOps[:], opcode) {
-		voidOpLines = true
-	} else if voidOpLines == true {
-		voidOpLines = false
-		if !labelRegex.MatchString(line) {
-			addEmptyLine(&newLines, trimmedLastLine)
-		}
-	}
-
-	if labelRegex.MatchString(line) {
-		handleLabel(&newLines, commentLines, trimmedLastLine, line)
-	} else {
-		newLines = append(newLines, "    "+line)
-	}
-
-	if commentRegex.MatchString(line) {
-		if commentLines == 0 && trimmedLastLine != "" {
-			newLines = insert(newLines, len(newLines)-1, "")
-		}
-		commentLines++
-	} else {
-		commentLines = 0
-	}
-
-	*newLinesPtr = newLines
-	*commentLinesPtr = commentLines
-	*voidOpLinesPtr = voidOpLines
+	return fmt.Sprintf("%s%s\n", comments, line)
 }
 
 func main() {
 	opts, err := docopt.ParseArgs(usage, os.Args[1:], version)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed to parse args: %s", err)
 	}
 
-	opts.Bind(&config)
+	config := Config{}
+	if err = opts.Bind(&config); err != nil {
+		log.Fatalf("failed to bind args: %s:", err)
+	}
 
 	file, err := os.Open(config.File)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	defer file.Close()
 
-	newLines := []string{}
-	commentLines := 0
-	voidOpLines := false
+	var (
+		newLines    []Line
+		commentBuff []string
 
-	scanner := bufio.NewScanner(file)
+		scanner = bufio.NewScanner(file)
+	)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		if regexp.MustCompile(`^#pragma `).MatchString(line) {
-			newLines = append(newLines, line)
+		if line == "" {
 			continue
 		}
 
-		handleLine(&newLines, line, &commentLines, &voidOpLines)
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		// If its the pragma line, add it without modification
+		if versionMatch.MatchString(line) {
+			newLines = append(newLines, Line{Text: line, IsVoid: true, Comments: commentBuff})
+			continue
+		}
+
+		// If its a comment, add it to the buffer to be
+		// associated with the first non comment line
+		if commentRegex.MatchString(line) {
+			commentBuff = append(commentBuff, line)
+			continue
+		}
+
+		// Construct a Line from the comment buf and flags
+		op := opMatch.FindString(line)
+		newLines = append(newLines, Line{
+			Text:     line,
+			Comments: commentBuff,
+			Op:       op,
+			IsVoid:   voidOpMatch.MatchString(op),
+			IsLabel:  labelRegex.MatchString(line),
+		})
+
+		// Reset the comment buff
+		commentBuff = nil
 	}
 
-	newContent := strings.Join(newLines[:], "\n")
-	if config.Edit {
-		os.WriteFile(config.File, []byte(newContent), 0)
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("failed to scan file: %+v", err)
+	}
+
+	output := ""
+	insideBody := false
+	for idx, line := range newLines {
+		if idx > 0 && newLines[idx-1].IsLabel {
+			insideBody = true
+		}
+
+		// Remove newline from a previous isVoid
+		if idx > 0 && line.IsVoid && newLines[idx-1].IsVoid {
+			output = output[:len(output)-1]
+		}
+
+		// We should indent if we're inside a body and
+		// haven't hit a new label
+		indented := insideBody && !line.IsLabel
+
+		output += line.ToString(indented)
+	}
+
+	if config.InPlace {
+		os.WriteFile(config.File, []byte(output), 0)
 	} else {
-		fmt.Println(newContent)
+		fmt.Println(output)
 	}
 }
