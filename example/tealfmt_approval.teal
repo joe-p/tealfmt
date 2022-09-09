@@ -36,8 +36,8 @@ main_l5:
     !=
     &&
     assert
-
     callsub endauction_4
+
     intc_1 // 1
     return
 
@@ -74,6 +74,7 @@ main_l6:
     load 2
     load 3
     callsub startauction_3
+
     intc_1 // 1
     return
 
@@ -100,6 +101,7 @@ main_l7:
 
     load 0
     callsub bid_1
+
     intc_1 // 1
     return
 
@@ -116,8 +118,8 @@ main_l10:
     intc_0 // 0
     ==
     assert
-
     callsub create_0
+
     intc_1 // 1
     return
     
@@ -204,6 +206,7 @@ pay_2:
     intc_0 // 0
     itxn_field Fee
     itxn_submit
+
     retsub
     
 // start_auction
@@ -249,6 +252,7 @@ endauction_4:
     bytec_1 // "highest_bid"
     app_global_get
     callsub pay_2
+
     bytec_2 // "auction_end"
     intc_0 // 0
     app_global_put
