@@ -11,19 +11,22 @@ import (
 	"github.com/docopt/docopt-go"
 )
 
+const version = "tealfmt v0.1.0"
 const usage = `tealfmt
 
 Usage:
-  tealfmt <file>
+  tealfmt <file> [ -e | --edit ]
   tealfmt -h | --help
   tealfmt --version
 
 Options:
   -h --help     Show this screen.
-  --version     Show version.`
+  --version     Show version.
+  -e --edit     Edit the file in place.`
 
 var config struct {
-	File string `docopt:"<file>"`
+	File string
+	Edit bool
 }
 
 var voidOps = [...]string{"assert", "app_global_put", "b", "bnz", "bz", "store"}
@@ -105,7 +108,7 @@ func handleLine(newLinesPtr *[]string, line string, commentLinesPtr *int, voidOp
 }
 
 func main() {
-	opts, err := docopt.ParseArgs(usage, os.Args[1:], "")
+	opts, err := docopt.ParseArgs(usage, os.Args[1:], version)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -139,5 +142,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(strings.Join(newLines[:], "\n"))
+	newContent := strings.Join(newLines[:], "\n")
+	if config.Edit {
+		os.WriteFile(config.File, []byte(newContent), 0)
+	} else {
+		fmt.Println(newContent)
+	}
 }
