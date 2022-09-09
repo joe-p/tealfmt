@@ -127,19 +127,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s := strings.Builder{}
+	output := ""
+
 	insideBody := false
 	for idx, line := range newLines {
 		if idx > 0 && newLines[idx-1].IsLabel {
 			insideBody = true
 		}
 
-		s.Write([]byte(line.ToString(insideBody && !line.IsLabel)))
+		indented := insideBody && !line.IsLabel
+
+		if idx > 0 && line.IsVoid && newLines[idx-1].IsVoid {
+			output = output[:len(output)-1]
+		}
+
+		output += line.ToString(indented)
 	}
 
 	if config.InPlace {
-		os.WriteFile(config.File, []byte(s.String()), 0)
+		os.WriteFile(config.File, []byte(output), 0)
 	} else {
-		fmt.Println(s.String())
+		fmt.Println(output)
 	}
 }
