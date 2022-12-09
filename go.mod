@@ -1,4 +1,4 @@
-module tealfmt
+module github.com/joe-p/tealfmt
 
 go 1.18
 
