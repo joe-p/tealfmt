@@ -1,29 +1,12 @@
-package main
+package tealfmt
 
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
-	"os"
 	"regexp"
 	"strings"
-
-	"github.com/docopt/docopt-go"
-)
-
-const (
-	version = "tealfmt v0.1.0"
-	usage   = `tealfmt
-
-Usage:
-  tealfmt <file> [ -i | --inplace ]
-  tealfmt -h | --help
-  tealfmt --version
-
-Options:
-  -h --help     Show this screen.
-  --version     Show version.
-  -i --inplace  Edit the file in place.`
 )
 
 var (
@@ -40,10 +23,6 @@ var (
 	voidOpMatch  = regexp.MustCompile("^(" + strings.Join(voidOps, "|") + ")$")
 )
 
-type Config struct {
-	File    string `docopt:"<file>"`
-	InPlace bool   `docopt:"-i,--inplace"`
-}
 type Line struct {
 	Text     string
 	Comments []string
@@ -80,28 +59,12 @@ func (l *Line) ToString(insideBody bool) string {
 	return fmt.Sprintf("%s%s\n", comments, line)
 }
 
-func main() {
-	opts, err := docopt.ParseArgs(usage, os.Args[1:], version)
-	if err != nil {
-		log.Fatalf("failed to parse args: %s", err)
-	}
-
-	config := Config{}
-	if err = opts.Bind(&config); err != nil {
-		log.Fatalf("failed to bind args: %s:", err)
-	}
-
-	file, err := os.Open(config.File)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
+func Format(r io.Reader) string {
 	var (
 		newLines    []Line
 		commentBuff []string
 
-		scanner = bufio.NewScanner(file)
+		scanner = bufio.NewScanner(r)
 	)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -160,9 +123,5 @@ func main() {
 		output += line.ToString(indented)
 	}
 
-	if config.InPlace {
-		os.WriteFile(config.File, []byte(output), 0)
-	} else {
-		fmt.Println(output)
-	}
+	return output
 }
