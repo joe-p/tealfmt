@@ -76,6 +76,7 @@ func Format(r io.Reader) string {
 		// If its the pragma line, add it without modification
 		if versionMatch.MatchString(line) {
 			newLines = append(newLines, Line{Text: line, IsVoid: true, Comments: commentBuff})
+			commentBuff = nil
 			continue
 		}
 
@@ -102,6 +103,10 @@ func Format(r io.Reader) string {
 
 	if err := scanner.Err(); err != nil {
 		log.Fatalf("failed to scan file: %+v", err)
+	}
+	
+	if commentBuff != nil {
+		newLines = append(newLines, Line{Comments: commentBuff})
 	}
 
 	output := ""
